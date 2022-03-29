@@ -35,3 +35,8 @@ all.equal(my_bed_file$position, their_bed_file$position)
 all.equal(my_bed_file$log_p, their_bed_file$log_p)
 
 all.equal(my_bed_file$logfc, their_bed_file$logfc)
+
+my_bed_file$log_p_round <- round(my_bed_file$log_p, 3)
+their_bed_file$log_p_round <- round(their_bed_file$log_p, 3)
+
+all.equal(my_bed_file$log_p_round, their_bed_file$log_p_round)

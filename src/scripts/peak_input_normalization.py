@@ -451,6 +451,8 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
 
     It also calculates a log2 fold change.
 
+    It will calculate the p value as 1 if the input is higher than the clip.
+
     Returns: a list consisting of the p-value and the logfc calculated.
     """
     a = int(peak_clip)
@@ -470,8 +472,11 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     # logfc
     logfc = math.log2((a / int(clip_total)) / (c / int(input_total)))
 
+    # Set p value to 1 and log p value to 0 if input is higher than clip
+    if logfc < 0:
+        return_list = [0, 1]
     # Check if fisher exact should be run
-    if expa < 5 or expb < 5 or expc < 5 or expd < 5 or a < 5 or b < 5 or c < 5 or d < 5:
+    elif expa < 5 or expb < 5 or expc < 5 or expd < 5 or a < 5 or b < 5 or c < 5 or d < 5:
         return_list = fisher_test(obs)
     elif expa >= 5 or expb >= 5 or expc >= 5 or expd >= 5:
         return_list = chi_square_test(obs)
