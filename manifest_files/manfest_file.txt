@@ -1,0 +1,2 @@
+001	RBFOX2	MIN6	samtools_sort/Rbfox2_CLIP_S24_2.15_r1.bam	samtools_sort/Rbfox2_IN_S26_2.15_r1.bam
+002	RBFOX2	MIN6	samtools_sort/IgG_CLIP_S25_2.15_r1.bam	samtools_sort/IgG_IN_S27_2.15_r1.bam
