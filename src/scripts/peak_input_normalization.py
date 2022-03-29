@@ -80,21 +80,24 @@ def setup():
         metavar = "\b")
 
     parser.add_argument("-o", "--output_dir", dest = "output_dir",
-        help = "Path to the output directory.",
+        help = "Path to the output directory. Default is 'results'. This will be made if it doesn't exist",
         default = "results",
         action = "store",
         metavar = "\b")
 
     # If we are using r1, this should be stranded I think
     parser.add_argument("-s", "--strandedness", dest = "strandedness",
-        help = "The strandedness of the library. If you expect reads in the bam file to be on the same strand as the gene, this should be 'stranded', if it is the opposite strand, this should be 'reverse_stranded'",
+        help = ("The strandedness of the library. If you expect reads in the bam file to be on" + 
+            "the same strand as the gene, this should be 'stranded', if it is the opposite strand," +
+            " this should be 'reverse_stranded'. If the library is unstranded this should be " +
+            "'unstranded'. The default is 'stranded'"),
         default = "stranded",
         action = "store",
         metavar = "\b")
 
     # If we are using r1, this should be stranded I think
     parser.add_argument("-c", "--cutoff", dest = "cutoff_length",
-        help = "The cutoff for mapped length to be included, default is 10000",
+        help = "The cutoff for mapped length to be included, default is 1000",
         default = 1000,
         action = "store",
         metavar = "\b")
@@ -130,6 +133,9 @@ def make_output_dir(path):
 def make_input_dict(manifest_file, sample_dict):
     """
     Make a dictionary of input files
+
+    Returns - No return, but the sample dictionary is updated with paths
+    to all files needed for analysis.
     """
 
     # Go through each entry in the manifest file
@@ -145,6 +151,8 @@ def make_input_dict(manifest_file, sample_dict):
 def get_input_files(input_info):
     """
     Pull out bam files, get bed file name from bam file input
+
+    Returns - a list of file names based on the input manifest file.
     """
 
     save_name, sample, celltype, clip_bam, input_bam = input_info.strip().split("\t")
@@ -159,7 +167,11 @@ def get_input_files(input_info):
 def make_reads_dict(sample_dict, read_count_file):
     """
     Make a dictionary of the number of reads in each bam file. Save to a
-    file if it doesn't already exist
+    file if it doesn't already exist. If the file already exists, the
+    read number is extracted from the file, if it doesn't, samtools is
+    used to count reads.
+
+    Returns - a dictionary of each file and the number of reads.
     """
 
     reads_dict = {}
@@ -213,7 +225,10 @@ def make_reads_dict(sample_dict, read_count_file):
 
 def bam_read_count(bamfile):
     """
-    Return  the number of reads in a bam file
+    Uses samtools to count the number of reads in a bam file. Requires samtools to be
+    loaded
+
+    Returns - the number of reads in a bam file.
     """
 
     try:
@@ -229,6 +244,12 @@ def bam_read_count(bamfile):
 # Make bed dict #
 ################# 
 def make_bed_dict(line):
+    """
+    Makes a dictionary of information about each line in a bed file.
+
+    Returns - a dictionary with information from the bed file that can be
+    easily accessed.
+    """
     chromosome, start, end, gene, p_val, strand, middle_down, middle_up = line.strip().split("\t")
     bed_dict = {"chromosome": chromosome,
                 "start": int(start),
@@ -245,6 +266,17 @@ def make_bed_dict(line):
 ####################
 
 def new_bam_file(bed_dict, bam_file, options, save_bam):
+    """
+    Generates a new bam file consisting only of the reads that mapped to a 
+    specific region. This function was written so that I could look at how
+    the perl script was processing specific reads and should not be needed
+    with the final script. It is a helpful function though, so I will keep
+    it.
+
+    Returns - Nothing, writes a new bam file consisting only of the reads
+    of interest.
+    """
+
     chromosome = bed_dict["chromosome"]
     start = bed_dict["start"]
     end = bed_dict["end"]
@@ -280,6 +312,31 @@ def new_bam_file(bed_dict, bam_file, options, save_bam):
                 write_file.write(read)
 
 def count_bam_reads(bed_dict, bam_file, options):
+    """
+    Uses pysam.fetch to identify all reads that map to a region of the genome.
+    The reads will be counted according to the strandedness of the library and
+    the read used.
+
+    There is currently also a cutoff for the length of the mapped read because
+    we were seeing many reads that had "introns" in the cigar string that were
+    thousands of base pairs long and the start and end of the read were not in
+    the same gene.
+
+    This currently largely counts the same reads as the original perl script, 
+    but I have not completely been able to replicate it. In the original perl
+    script, they split a read at any intron and determined if either of the
+    reads from the split read were in the region. All of these intron reads 
+    ended up being thrown out in my experience.
+
+    For the index, in the perl script, they noted that bed files are 1-based
+    and bam files are 0-based. Pysam automatically accounts for this and I
+    compared all of my regions to the regions in the perl script and found
+    that they lined up perfectly without me changing the index position.
+
+    Returns - the total reads that mapped to the appropriate strand in a region
+    of the bam file.
+    """
+
     chromosome = bed_dict["chromosome"]
     start = bed_dict["start"]
     end = bed_dict["end"]
@@ -321,59 +378,37 @@ def count_bam_reads(bed_dict, bam_file, options):
             if not read.is_reverse:
                 total_reads += 1
 
+        # If the library is not stranded, count all reads
+        elif options.strandedness == "unstranded":
+            total_reads += 1
+
     alignment_file.close()
     print(total_reads)
     return(total_reads)
-
-"""
-Based on comparing my numbers to the numbers from the perl script, I don't
-need to change the index position.
-
-some notes
-From pysam fetch()
-fetch one or more rows in a region using 0-based indexing. The region is specified
-by reference, start and end. Alternatively, a samtools region string can be supplied.
-
-From the perl script notes
-# Keep in mind:
-# STAR sam output (including output from 'samtools view .bam') is 1-based, closed ended
-# Bed files are 0-based, open-ended
-
-I'll need to think about this when counting... maybe I will need to shift the bed file
-regions by 1?
-
-
-From pysam faq Confusion might arise as different file formats might have different conventions.
-For example, the SAM format is 1-based while the BAM format is 0-based. It is important to
-remember that pysam will always conform to the python convention and translate to/from the file
-format automatically.
-
-The only exception is the region string in the fetch() and pileup() methods. This string follows
-the convention of the samtools command line utilities. The same is true for any coordinates passed
-to the samtools command utilities directly, such as pysam.mpileup().
-
-
-pysam.AlignmentFile.fetch() returns all reads overlapping a region sorted by the first aligned
-base in the reference sequence. Note that it will also return reads that are only partially
-overlapping with the region. Thus the reads returned might span a region that is larger than
-the one queried.
-"""
 
 ###########################################
 # Perform chi square or fisher exact test #
 ###########################################
 
 def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
+    """
+    Decides if a chi-square or fiser exact test. The fisher exact test will be
+    run if any of the values or expected values will be less than 5. Once this
+    decision is made, it passes the values to either the fishers exact test or 
+    chi-sequare test
+
+    Returns: a list consisting of the p-value and the logfc calculated.
+    """
     a = int(peak_clip)
     b = int(clip_total) - a
     c = int(peak_input)
     d = int(input_total) - c
 
     tot = a + b + c + d
-    expa = (a+c)*(a+b)/tot
-    expb = (b+d)*(a+b)/tot
-    expc = (a+c)*(c+d)/tot
-    expd = (b+d)*(c+d)/tot
+    expa = (a + c) * (a + b) / tot
+    expb = (b + d) * (a + b) / tot
+    expc = (a + c) * (c + d) / tot
+    expd = (b + d) * (c + d) / tot
 
     # Check if fisher exact should be run
     if expa < 5 or expb < 5 or expc < 5 or expd < 5 or a < 5 or b < 5 or c < 5 or d < 5:
@@ -384,6 +419,13 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     return(return_list)
 
 def chi_square_test(a, b, c, d):
+    """
+    Runs a chi square test given the number of reads in the peak for both input and clip
+    and the number of reads outside of the peak for both input and clip.
+    The logfc is calculated using the code from the original perl script.
+
+    Returns: The p value and logfc calculated
+    """
 
     obs = np.array([[a, b], [c, d]])
 
@@ -393,7 +435,7 @@ def chi_square_test(a, b, c, d):
     p_value = abs(math.log10(p))
 
     # logfc
-    logfc = math.log((a/b)/(c/d))/math.log(2)
+    logfc = math.log((a / b) / (c / d)) / math.log(2)
 
     print(p_value)
     print(logfc)
