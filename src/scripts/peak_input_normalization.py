@@ -38,11 +38,24 @@ def main():
 
         with open(save_file_all, "w") as write_file, open(bed_file, "r") as in_bed:
             for line in in_bed:
+                # print()
                 bed_dict = make_bed_dict(line)
 
                 # Find number of reads in peaks and overall
                 read_count_clip = count_bam_reads(bed_dict, clip_bam, options)
                 read_count_input = count_bam_reads(bed_dict, input_bam, options)
+
+                if options.flavor == "perl_script":
+                    # To be consistent with the perl script use:
+                    read_count_input += 1
+                elif options.flavor == "default":
+                    # Otherwise use
+                    if read_count_input == 0:
+                        read_count_input = 1
+                else:
+                    sys.exit("unrecognized 'flavor' argument! Use 'perl_script' or 'default'")
+
+                # print(read_count_input)
                 total_clip_reads = total_reads_dict[clip_bam]
                 total_input_reads = total_reads_dict[input_bam]
 
@@ -65,7 +78,7 @@ def main():
                 # new_bam_file(bed_dict, clip_bam, options, save_clip)
                 # new_bam_file(bed_dict, input_bam, options, save_input)
 
-        print(results_dict)
+        # print(results_dict)
         new_results_dict = compress_peaks(results_dict)
 
     # 2 options. 1 - write to output file, 2 - keep a dictionary. Not sure what is best
@@ -113,6 +126,14 @@ def setup():
         action = "store",
         metavar = "\b")
 
+
+    # If we are using r1, this should be stranded I think
+    parser.add_argument("-f", "--flavor", dest = "flavor",
+        help = ("If input reads should be counted like the original perl script (always add 1) " +
+                "set to 'perl_script', otherwise set to 'default'"),
+        default = "default",
+        action = "store",
+        metavar = "\b")
 
 
     args = parser.parse_args()
@@ -413,8 +434,8 @@ def count_bam_reads(bed_dict, bam_file, options):
             total_reads += 1
 
     alignment_file.close()
-    print(bam_file)
-    print(total_reads)
+    # print(chromosome + "_" + str(start) + "_" + str(end))
+    # print(total_reads)
     return(total_reads)
 
 ###########################################
@@ -428,8 +449,7 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     decision is made, it passes the values to either the fishers exact test or 
     chi-sequare test.
 
-    It also calculates a log fold change using the same code from the original
-    perl script.
+    It also calculates a log2 fold change.
 
     Returns: a list consisting of the p-value and the logfc calculated.
     """
@@ -448,7 +468,7 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     obs = np.array([[a, b], [c, d]])
 
     # logfc
-    logfc = math.log((a / b) / (c / d)) / math.log(2)
+    logfc = math.log2((a / int(clip_total)) / (c / int(input_total)))
 
     # Check if fisher exact should be run
     if expa < 5 or expb < 5 or expc < 5 or expd < 5 or a < 5 or b < 5 or c < 5 or d < 5:
@@ -478,7 +498,7 @@ def chi_square_test(obs):
 
     return([p_value, p])
 
-def fisher_test(a, b, c, d):
+def fisher_test(obs):
     """
     Runs a fisher exact test given the number of reads in the peak for both
     input and clip and the number of reads outside of the peak for both input
@@ -521,11 +541,27 @@ def compress_peaks(results_dict):
                 keep_peak = peak_list[index_val]
 
                 # If the peaks overlap, keep the best
-                if ((peak["start"] >= keep_peak["start"] and peak["start"] <= keep_peak["end"]) or 
-                    (peak["end"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"])):
+                # Start of read is inside existing
+                start_inside = peak["start"] >= keep_peak["start"] and peak["start"] <= keep_peak["end"]
+                
+                # End of read is inside existing
+                end_inside = peak["end"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"]
+                
+                # Full read is inside existing - I think this isn't necessary, test later
+                shorter_inside = peak["start"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"]
+                
+                # Existing read is inside new
+                longer_inside = peak["start"] <= keep_peak["start"] and peak["end"] >= keep_peak["end"]
+                
+                if start_inside or end_inside or shorter_inside or longer_inside:
                     if peak["log"] > keep_peak["log"]:
                         remove_index = True
                         add = True
+
+                    elif peak["log"] == keep_peak["log"]:
+                        add = True
+                        remove_index = False
+
                     else:
                         remove_index = False
                         add = False

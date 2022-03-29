@@ -2,3 +2,6 @@
 !.gitignore
 !.gitattributes
 data/
+results/
+logs/
+python_results/

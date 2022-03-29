@@ -80,6 +80,9 @@ for my $peak (keys %peak_read_counts) {
     print STDOUT "log2 fold change: ";
     print STDOUT $l2fc;
     print STDOUT "\n";
+    print STDOUT "position: ";
+    print STDOUT $peak;
+    print STDOUT "\n\n";
     my ($chipval,$chival,$chitype,$chienrdepl) = &fisher_or_chisq($peak_read_counts{$peak}{"expt"},$mapped_read_count{"expt"}-$peak_read_counts{$peak}{"expt"},$peak_read_counts{$peak}{"input"},$mapped_read_count{"input"}-$peak_read_counts{$peak}{"input"});
     my $log10pval = $chipval > 0 ? -1 * log($chipval)/log(10) : 400 ;
 
@@ -162,9 +165,9 @@ sub chi_square {
     if ($expa >= 5 || $expb >= 5 || $expc >= 5 || $expd >= 5) {
         my $chival = &square(&abs($a-$expa)-0.5)/$expa +  &square(&abs($b-$expb)-0.5)/$expb + &square(&abs($c-$expc)-0.5)/$expc +  &square(&abs($d-$expd)-0.5)/$expd;
         
-        print STDOUT "chival: ";
-        print STDOUT $chival;
-        print STDOUT "\n";
+        # print STDOUT "chival: ";
+        # print STDOUT $chival;
+        # print STDOUT "\n";
 
         my $pval = Statistics::Distributions::chisqrprob(1,&abs($chival));
 
@@ -275,13 +278,13 @@ sub read_bamfi {
 	
 	my @read_regions = &parse_cigar_string($r1_start,$r1_cigar,$r1_chr,$frag_strand);
 	
-    print STDOUT "return from cigar \n";
-    print STDOUT "@read_regions \n";
+    # print STDOUT "return from cigar \n";
+    # print STDOUT "@read_regions \n";
 
 	my %tmp_hash;
 	for my $region (@read_regions) {
-        print STDOUT "go through regions \n";
-        print STDOUT "$region \n";
+        # print STDOUT "go through regions \n";
+        # print STDOUT "$region \n";
 	    my ($rchr,$rstr,$rpos) = split(/\:/,$region);
 	    my ($rstart,$rstop) = split(/\-/,$rpos);
 
@@ -294,16 +297,16 @@ sub read_bamfi {
 		for my $peak (@{$peaks{$rchr}{$rstr}{$ri}}) {
 		    my ($pchr,$ppos,$pstr,$ppval) = split(/\:/,$peak);
 		    my ($pstart,$pstop) = split(/\-/,$ppos);
-            print STDOUT "going through peaks \n";
-            print STDOUT "$pstart \n";
-            print STDOUT "$rstop \n";
-            print STDOUT "$pstop \n";
-            print STDOUT "$rstart \n";
+            # print STDOUT "going through peaks \n";
+            # print STDOUT "$pstart \n";
+            # print STDOUT "$rstop \n";
+            # print STDOUT "$pstop \n";
+            # print STDOUT "$rstart \n";
 
 		    next if ($pstart >= $rstop || $pstop <= $rstart);
 		    $tmp_hash{$peak} = 1;
-            print STDOUT "$region \n";
-            print STDOUT "found\n";
+            # print STDOUT "$region \n";
+            # print STDOUT "found\n";
 
 		}
 	    }
@@ -327,9 +330,9 @@ sub parse_cigar_string {
     my $chr = shift;
     my $strand = shift;
 
-    print STDOUT "\n";
-    print STDOUT "$flags \n";
-    print STDOUT "$region_start_pos \n";
+    # print STDOUT "\n";
+    # print STDOUT "$flags \n";
+    # print STDOUT "$region_start_pos \n";
     my $current_pos = $region_start_pos;
     my @regions;
 

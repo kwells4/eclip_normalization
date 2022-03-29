@@ -1,0 +1,1 @@
+001	RBFOX2	MIN6	data/test_compression_r2/Rbfox2_CLIP_S24_r2.bam	data/test_compression_r2/Rbfox2_IN_S26_r2.bam
