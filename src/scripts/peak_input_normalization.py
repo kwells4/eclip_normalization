@@ -17,6 +17,7 @@ def main():
 
     make_output_dir(options.output_dir)
     sample_dict = {} # Outer level is sample id (save name), inner levels are input_bam, bed, clip_bam
+
     manifest_file = options.manifest_file
     read_count_file = options.manifest_file + ".mapped_read_num"
 
@@ -27,27 +28,46 @@ def main():
 
     # For each sample in the input dict
     for sample in sample_dict:
-        save_file = os.path.join(options.output_dir, sample +
+        # Empty dictionary for compressing later
+        results_dict = defaultdict(list)
+        save_file_all = os.path.join(options.output_dir, sample +
             "_01.basedon_001_01.peaks.l2inputnormnew.bed")
         bed_file = sample_dict[sample]["bedfile"]
         input_bam = sample_dict[sample]["input_bam"]
         clip_bam = sample_dict[sample]["clip_bam"]
 
-        with open(save_file, "w") as write_file, open(bed_file, "r") as in_bed:
+        with open(save_file_all, "w") as write_file, open(bed_file, "r") as in_bed:
             for line in in_bed:
                 bed_dict = make_bed_dict(line)
+
+                # Find number of reads in peaks and overall
                 read_count_clip = count_bam_reads(bed_dict, clip_bam, options)
                 read_count_input = count_bam_reads(bed_dict, input_bam, options)
                 total_clip_reads = total_reads_dict[clip_bam]
                 total_input_reads = total_reads_dict[input_bam]
 
-                print(bed_dict)
+                # Run tests
                 p_val_log, p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input, total_clip_reads, total_input_reads)
+                
+                # Write to a file
                 write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"], bed_dict["start"], bed_dict["end"], p_val_log, logfc, bed_dict["strand"]))
+                
+                # Save all output to a dictionary for compressing
+                bed_dict["p_value"] = p_val
+                bed_dict["log"] = logfc
+                bed_dict["p_val_log"] = p_val_log
+                save_val = bed_dict["chromosome"] + "_" + bed_dict["strand"]
+
+                results_dict[save_val].append(bed_dict)
+
                 # save_clip = os.path.join("test_bams", clip_bam.split("/")[-1])
                 # save_input  = os.path.join("test_bams", input_bam.split("/")[-1])
                 # new_bam_file(bed_dict, clip_bam, options, save_clip)
                 # new_bam_file(bed_dict, input_bam, options, save_input)
+
+        print(results_dict)
+        new_results_dict = compress_peaks(results_dict)
+
     # 2 options. 1 - write to output file, 2 - keep a dictionary. Not sure what is best
     # Make compressed output where overlapping peaks are discarded (just keep the top hit)
     # This maybe is better in R?
@@ -189,7 +209,7 @@ def make_reads_dict(sample_dict, read_count_file):
 
         if len(bam_files) >= 1:
             sys.exit("Not all files have been counted. Remove file named " +
-                read_count_file + " and rerun.")
+                read_count_file + " and rerun.\n")
 
     else:
         with open(read_count_file, "w") as count_file:
@@ -227,8 +247,8 @@ def bam_read_count(bamfile):
         read_count = subprocess.check_output(['samtools view -c -F 4 ' + bamfile], shell=True)
         read_count = int(read_count)
     except:
-        sys.exit("There was a problem counting the number of reads in the bam file, " +
-            bamfile + ". Check that samtools is installed and that the bamfile looks correct.")
+        sys.exit("There was a problem counting the number of reads in the bam file located: " +
+            bamfile + ".\n Check that samtools is installed and that the bamfile looks correct.\n")
     return (read_count)
 
 #################
@@ -319,6 +339,15 @@ def count_bam_reads(bed_dict, bam_file, options):
     reads from the split read were in the region. All of these intron reads 
     ended up being thrown out in my experience.
 
+    To attempt to correctly count reads like the perl script, I skip reads
+    that don't have any positions mapped within the read. I do this using
+    pysams get_reference_positions. To save time and computing power, I 
+    only look though positions until I find one position that is between the
+    start and end of the peak. In testing, this mostly had the same number 
+    as the perl script. The one concern is that the perl script said there
+    were 25 counts in the input and I see 24. Interestingly, when I manually
+    count the output from the perl script I also see 24.
+
     For the index, in the perl script, they noted that bed files are 1-based
     and bam files are 0-based. Pysam automatically accounts for this and I
     compared all of my regions to the regions in the perl script and found
@@ -342,7 +371,17 @@ def count_bam_reads(bed_dict, bam_file, options):
         # print(read.reference_length)
         # print()
 
-        if read_length > int(options.cutoff_length):
+        # This does a check to make sure that a position mapped to
+        # the peak. This is to fix those reads where the intron
+        # is thousands of bp long and skips the peak.
+        keep_read = False
+        for position in read.get_reference_positions():
+            if position >= start and position <= end:
+                keep_read = True
+                continue
+
+        # If no positions mapped to the peak, move on to the next read
+        if not keep_read:
             continue
 
         # If the library is stranded and the gene is + strand,
@@ -374,6 +413,7 @@ def count_bam_reads(bed_dict, bam_file, options):
             total_reads += 1
 
     alignment_file.close()
+    print(bam_file)
     print(total_reads)
     return(total_reads)
 
@@ -453,6 +493,62 @@ def fisher_test(a, b, c, d):
     p_value = abs(math.log10(p))
 
     return([p_value, p])
+
+##################
+# Compress peaks #
+##################
+
+def compress_peaks(results_dict):
+    """
+    This compresses peaks so that only one peak overlapping a region is in the final
+    output file. The winning peak is based on the log fold enrichment (highest
+    enrichemnt wins)
+
+    Return - a new dictionary consisting of only the winning sections.
+    """
+    new_results_dict = defaultdict(list)
+
+    for chromosome_strand in results_dict:
+        peak_list = results_dict[chromosome_strand]
+
+        keep_index = []
+        index = 0
+        for peak in peak_list:
+            # Default is to keep unless otherwise decided
+            add = True
+            for index_val in keep_index:
+                remove_index = False
+                keep_peak = peak_list[index_val]
+
+                # If the peaks overlap, keep the best
+                if ((peak["start"] >= keep_peak["start"] and peak["start"] <= keep_peak["end"]) or 
+                    (peak["end"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"])):
+                    if peak["log"] > keep_peak["log"]:
+                        remove_index = True
+                        add = True
+                    else:
+                        remove_index = False
+                        add = False
+
+                if remove_index:
+                    keep_index.remove(index_val)
+
+            if add:
+                keep_index.append(index)
+
+            index += 1
+
+        chromosome_list = []
+
+        # Add the indexes that were kept
+        for index_num in keep_index:
+            chromosome_list.append(peak_list[index_num])
+
+        # Add to final dictionary
+        new_results_dict[chromosome_strand] = chromosome_list
+
+
+
 
 if __name__ == "__main__":
     main()

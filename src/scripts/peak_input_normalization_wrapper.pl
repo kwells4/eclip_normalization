@@ -215,11 +215,11 @@ for my $line (<F>) {
 		print STDERR "skipping $output alreadydone\n";
 		if (-e $output_compressed) {
 		} else {
-		    system("perl compress_l2foldenrpeakfi.pl $output");
+		    system("perl src/scripts/compress_l2foldenrpeakfi.pl $output");
 		}
 	    } else {
-		system("perl overlap_peakfi_with_bam_PE.pl $clip_bam_fi_softlink $input_bam_fi_softlink $compare_peakfi_softlink $filist_fi_mappedreadnums $output");
-		system("perl compress_l2foldenrpeakfi.pl $output");
+		system("perl src/scripts/overlap_peakfi_with_bam_PE.pl $clip_bam_fi_softlink $input_bam_fi_softlink $compare_peakfi_softlink $filist_fi_mappedreadnums $output");
+		system("perl src/scripts/compress_l2foldenrpeakfi.pl $output");
 	    }
 
 	}
