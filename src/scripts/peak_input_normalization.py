@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import chi2_contingency
+from scipy.stats import fisher_exact
 import math
 import pysam
 import argparse
@@ -41,25 +42,15 @@ def main():
                 total_input_reads = total_reads_dict[input_bam]
 
                 print(bed_dict)
-                p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input, total_clip_reads, total_input_reads)
-                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"], bed_dict["start"], bed_dict["end"], p_val, logfc, bed_dict["strand"]))
+                p_val_log, p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input, total_clip_reads, total_input_reads)
+                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"], bed_dict["start"], bed_dict["end"], p_val_log, logfc, bed_dict["strand"]))
                 # save_clip = os.path.join("test_bams", clip_bam.split("/")[-1])
                 # save_input  = os.path.join("test_bams", input_bam.split("/")[-1])
                 # new_bam_file(bed_dict, clip_bam, options, save_clip)
                 # new_bam_file(bed_dict, input_bam, options, save_input)
-
-    # Open bed file
-    # For each line in bed file
-    # Pass to function to get reads from bam for just that region
-    # Decide if we need chisquare or fisher exact
-    # Run test
     # 2 options. 1 - write to output file, 2 - keep a dictionary. Not sure what is best
     # Make compressed output where overlapping peaks are discarded (just keep the top hit)
     # This maybe is better in R?
-
-
-
-
 
 #########
 # Setup #
@@ -395,7 +386,10 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     Decides if a chi-square or fiser exact test. The fisher exact test will be
     run if any of the values or expected values will be less than 5. Once this
     decision is made, it passes the values to either the fishers exact test or 
-    chi-sequare test
+    chi-sequare test.
+
+    It also calculates a log fold change using the same code from the original
+    perl script.
 
     Returns: a list consisting of the p-value and the logfc calculated.
     """
@@ -410,38 +404,55 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     expc = (a + c) * (c + d) / tot
     expd = (b + d) * (c + d) / tot
 
+    # Make a contengency table
+    obs = np.array([[a, b], [c, d]])
+
+    # logfc
+    logfc = math.log((a / b) / (c / d)) / math.log(2)
+
     # Check if fisher exact should be run
     if expa < 5 or expb < 5 or expc < 5 or expd < 5 or a < 5 or b < 5 or c < 5 or d < 5:
-        fisher_test()
+        return_list = fisher_test(obs)
     elif expa >= 5 or expb >= 5 or expc >= 5 or expd >= 5:
-        return_list = chi_square_test(a, b, c, d)
+        return_list = chi_square_test(obs)
+    else:
+        sys.exit("Unclear if chi squared or fishers test should be done.")
+
+    return_list.append(logfc)
 
     return(return_list)
 
-def chi_square_test(a, b, c, d):
+def chi_square_test(obs):
     """
-    Runs a chi square test given the number of reads in the peak for both input and clip
-    and the number of reads outside of the peak for both input and clip.
-    The logfc is calculated using the code from the original perl script.
+    Runs a chi square test given the number of reads in the peak for both input
+    and clip and the number of reads outside of the peak for both input and clip.
+    These read numbers should be proveded as a contengency table.
 
-    Returns: The p value and logfc calculated
+    Returns: A list consisting of the p value and log p value calculated
     """
-
-    obs = np.array([[a, b], [c, d]])
 
     stat, p, dof, expected = chi2_contingency(obs)
 
     # P val
     p_value = abs(math.log10(p))
 
-    # logfc
-    logfc = math.log((a / b) / (c / d)) / math.log(2)
+    return([p_value, p])
 
-    print(p_value)
-    print(logfc)
+def fisher_test(a, b, c, d):
+    """
+    Runs a fisher exact test given the number of reads in the peak for both
+    input and clip and the number of reads outside of the peak for both input
+    and clip. These read numbers should be provided as a contengency table.
 
-    return([p_value, logfc])
+    Returns: A list consisting of the p value and log p value calculated
+    """
 
+    odds, p = fisher_exact(obs)
+
+    # P val
+    p_value = abs(math.log10(p))
+
+    return([p_value, p])
 
 if __name__ == "__main__":
     main()
