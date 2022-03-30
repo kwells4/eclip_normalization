@@ -129,14 +129,6 @@ def setup():
         action = "store",
         metavar = "\b")
 
-    # If we are using r1, this should be stranded I think
-    parser.add_argument("-c", "--cutoff", dest = "cutoff_length",
-        help = "The cutoff for mapped length to be included, default is 1000",
-        default = 1000,
-        action = "store",
-        metavar = "\b")
-
-
     # The original script always added 1 to their input count, I don't think that's necessary
     # but this is included to make the output consistent with the original perl script.
     parser.add_argument("-f", "--flavor", dest = "flavor",
