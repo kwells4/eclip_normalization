@@ -80,11 +80,6 @@ def main():
 
                 results_dict[save_val].append(bed_dict)
 
-                # save_clip = os.path.join("test_bams", clip_bam.split("/")[-1])
-                # save_input  = os.path.join("test_bams", input_bam.split("/")[-1])
-                # new_bam_file(bed_dict, clip_bam, options, save_clip)
-                # new_bam_file(bed_dict, input_bam, options, save_input)
-
         print("Finished counting for " + bed_file)
         print("Starting peak compression for " + bed_file)
 
@@ -352,11 +347,6 @@ def count_bam_reads(bed_dict, bam_file, options):
     The reads will be counted according to the strandedness of the library and
     the read used.
 
-    There is currently also a cutoff for the length of the mapped read because
-    we were seeing many reads that had "introns" in the cigar string that were
-    thousands of base pairs long and the start and end of the read were not in
-    the same gene.
-
     This currently largely counts the same reads as the original perl script, 
     but I have not completely been able to replicate it. In the original perl
     script, they split a read at any intron and determined if either of the
@@ -368,9 +358,7 @@ def count_bam_reads(bed_dict, bam_file, options):
     pysams get_reference_positions. To save time and computing power, I 
     only look though positions until I find one position that is between the
     start and end of the peak. In testing, this mostly had the same number 
-    as the perl script. The one concern is that the perl script said there
-    were 25 counts in the input and I see 24. Interestingly, when I manually
-    count the output from the perl script I also see 24.
+    as the perl script.
 
     For the index, in the perl script, they noted that bed files are 1-based
     and bam files are 0-based. Pysam automatically accounts for this and I
@@ -437,8 +425,6 @@ def count_bam_reads(bed_dict, bam_file, options):
             total_reads += 1
 
     alignment_file.close()
-    print(chromosome + "_" + str(start) + "_" + str(end))
-    print(total_reads)
     return(total_reads)
 
 ###########################################
