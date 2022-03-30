@@ -1,10 +1,20 @@
 import os
 from collections import defaultdict
 
-output_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/test_compression_r2"
-input_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/samtools_sort_r2"
+# To make file to test for collapsing overlapping peaks
+# output_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/test_compression_r2"
+# input_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/samtools_sort_r2"
 
-overlapping_bed = os.path.join(input_directory, "all_overlaps.bed")
+# overlapping_bed = os.path.join(input_directory, "all_overlaps.bed")
+# input_bed = os.path.join(input_directory, "Rbfox2_CLIP_S24_r2.peaks.bed")
+# output_bed = os.path.join(output_directory, "Rbfox2_CLIP_S24_r2.peaks.bed")
+
+# To make file to check the peaks that didn't match up
+output_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/test_unmatched"
+input_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data/samtools_sort_r2"
+bed_directory = "/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normalization/data"
+
+overlapping_bed = os.path.join(bed_directory, "unmatched.bed")
 input_bed = os.path.join(input_directory, "Rbfox2_CLIP_S24_r2.peaks.bed")
 output_bed = os.path.join(output_directory, "Rbfox2_CLIP_S24_r2.peaks.bed")
 

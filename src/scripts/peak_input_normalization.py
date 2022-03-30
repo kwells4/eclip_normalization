@@ -32,13 +32,15 @@ def main():
         results_dict = defaultdict(list)
         save_file_all = os.path.join(options.output_dir, sample +
             "_01.basedon_001_01.peaks.l2inputnormnew.bed")
+        save_file_compressed = os.path.join(options.output_dir, sample +
+            "_01.basedon_001_01.peaks.l2inputnormnew.bed.compressed.bed")
         bed_file = sample_dict[sample]["bedfile"]
         input_bam = sample_dict[sample]["input_bam"]
         clip_bam = sample_dict[sample]["clip_bam"]
 
         with open(save_file_all, "w") as write_file, open(bed_file, "r") as in_bed:
+            print("starting analysis of " + bed_file)
             for line in in_bed:
-                # print()
                 bed_dict = make_bed_dict(line)
 
                 # Find number of reads in peaks and overall
@@ -55,7 +57,6 @@ def main():
                 else:
                     sys.exit("unrecognized 'flavor' argument! Use 'perl_script' or 'default'")
 
-                # print(read_count_input)
                 total_clip_reads = total_reads_dict[clip_bam]
                 total_input_reads = total_reads_dict[input_bam]
 
@@ -63,7 +64,9 @@ def main():
                 p_val_log, p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input, total_clip_reads, total_input_reads)
                 
                 # Write to a file
-                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"], bed_dict["start"], bed_dict["end"], p_val_log, logfc, bed_dict["strand"]))
+                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"],
+                    bed_dict["start"], bed_dict["end"], p_val_log, logfc, bed_dict["strand"],
+                    read_count_clip, read_count_input, total_clip_reads, total_input_reads))
                 
                 # Save all output to a dictionary for compressing
                 bed_dict["p_value"] = p_val
@@ -78,12 +81,15 @@ def main():
                 # new_bam_file(bed_dict, clip_bam, options, save_clip)
                 # new_bam_file(bed_dict, input_bam, options, save_input)
 
-        # print(results_dict)
-        new_results_dict = compress_peaks(results_dict)
+        print("Finished counting for " + bed_file)
+        print("Starting peak compression for " + bed_file)
 
-    # 2 options. 1 - write to output file, 2 - keep a dictionary. Not sure what is best
-    # Make compressed output where overlapping peaks are discarded (just keep the top hit)
-    # This maybe is better in R?
+        new_results_dict = compress_peaks(results_dict)
+        write_compressed_peaks(new_results_dict, save_file_compressed)
+
+        print("Finished peak compression for " + bed_file)
+
+    print("Successfully finished analysis")
 
 #########
 # Setup #
@@ -127,7 +133,8 @@ def setup():
         metavar = "\b")
 
 
-    # If we are using r1, this should be stranded I think
+    # The original script always added 1 to their input count, I don't think that's necessary
+    # but this is included to make the output consistent with the original perl script.
     parser.add_argument("-f", "--flavor", dest = "flavor",
         help = ("If input reads should be counted like the original perl script (always add 1) " +
                 "set to 'perl_script', otherwise set to 'default'"),
@@ -397,10 +404,10 @@ def count_bam_reads(bed_dict, bam_file, options):
         # is thousands of bp long and skips the peak.
         keep_read = False
         for position in read.get_reference_positions():
-            if position >= start and position <= end:
+            if position > start and position < end:
                 keep_read = True
                 continue
-
+                
         # If no positions mapped to the peak, move on to the next read
         if not keep_read:
             continue
@@ -434,8 +441,8 @@ def count_bam_reads(bed_dict, bam_file, options):
             total_reads += 1
 
     alignment_file.close()
-    # print(chromosome + "_" + str(start) + "_" + str(end))
-    # print(total_reads)
+    print(chromosome + "_" + str(start) + "_" + str(end))
+    print(total_reads)
     return(total_reads)
 
 ###########################################
@@ -498,8 +505,11 @@ def chi_square_test(obs):
 
     stat, p, dof, expected = chi2_contingency(obs)
 
-    # P val
-    p_value = abs(math.log10(p))
+    if p == 0:
+        p_value = "Inf"
+    else:
+        # P val
+        p_value = abs(math.log10(p))
 
     return([p_value, p])
 
@@ -514,8 +524,11 @@ def fisher_test(obs):
 
     odds, p = fisher_exact(obs)
 
-    # P val
-    p_value = abs(math.log10(p))
+    if p == 0:
+        p_value = "Inf"
+    else:
+        # P val
+        p_value = abs(math.log10(p))
 
     return([p_value, p])
 
@@ -523,18 +536,22 @@ def fisher_test(obs):
 # Compress peaks #
 ##################
 
-def compress_peaks(results_dict):
+def compress_peaks(dict_of_results):
     """
     This compresses peaks so that only one peak overlapping a region is in the final
-    output file. The winning peak is based on the log fold enrichment (highest
-    enrichemnt wins)
+    output file. The winning peak is based on the p value (highest wins).
+
+    I originally had the peak being defined by >= (or <=) but realized they did not
+    do that in the original script so I removed them.
 
     Return - a new dictionary consisting of only the winning sections.
     """
+
     new_results_dict = defaultdict(list)
 
-    for chromosome_strand in results_dict:
-        peak_list = results_dict[chromosome_strand]
+
+    for chromosome_strand in dict_of_results:
+        peak_list = dict_of_results[chromosome_strand]
 
         keep_index = []
         index = 0
@@ -547,26 +564,41 @@ def compress_peaks(results_dict):
 
                 # If the peaks overlap, keep the best
                 # Start of read is inside existing
-                start_inside = peak["start"] >= keep_peak["start"] and peak["start"] <= keep_peak["end"]
+                start_inside = peak["start"] > keep_peak["start"] and peak["start"] < keep_peak["end"]
                 
                 # End of read is inside existing
-                end_inside = peak["end"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"]
+                end_inside = peak["end"] > keep_peak["start"] and peak["end"] < keep_peak["end"]
                 
                 # Full read is inside existing - I think this isn't necessary, test later
-                shorter_inside = peak["start"] >= keep_peak["start"] and peak["end"] <= keep_peak["end"]
+                shorter_inside = peak["start"] > keep_peak["start"] and peak["end"] < keep_peak["end"]
                 
                 # Existing read is inside new
-                longer_inside = peak["start"] <= keep_peak["start"] and peak["end"] >= keep_peak["end"]
-                
-                if start_inside or end_inside or shorter_inside or longer_inside:
-                    if peak["log"] > keep_peak["log"]:
-                        remove_index = True
-                        add = True
+                longer_inside = peak["start"] < keep_peak["start"] and peak["end"] > keep_peak["end"]
 
-                    elif peak["log"] == keep_peak["log"]:
+                if start_inside or end_inside or shorter_inside or longer_inside:
+
+                    # Keep both if they are the same (including both "Inf")
+                    if peak["p_val_log"] == keep_peak["p_val_log"]:
                         add = True
                         remove_index = False
 
+                    # Keep only the new peak if it's Inf
+                    elif peak["p_val_log"] == "Inf":
+                        remove_index = True
+                        add = True
+
+                    # Keep only the old peak if it is Inf
+                    elif keep_peak["p_val_log"] == "Inf":
+                        remove_index = False
+                        add = False
+
+                    # Keep only the new peak if the p val is larger
+                    elif peak["p_val_log"] > keep_peak["p_val_log"]:
+                        remove_index = True
+                        add = True
+
+                    # The only option left should be that the p val of the keep
+                    # peak is larger, so it is kept and the new is not added.
                     else:
                         remove_index = False
                         add = False
@@ -588,7 +620,16 @@ def compress_peaks(results_dict):
         # Add to final dictionary
         new_results_dict[chromosome_strand] = chromosome_list
 
+    return(new_results_dict)
 
+
+def write_compressed_peaks(write_dict, file_name):
+    with open(file_name, "w") as write_file:
+        for chromosome in write_dict:
+            for write_list in write_dict[chromosome]:
+                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(write_list["chromosome"],
+                    write_list["start"], write_list["end"], write_list["p_val_log"],
+                    write_list["log"], write_list["strand"]))
 
 
 if __name__ == "__main__":

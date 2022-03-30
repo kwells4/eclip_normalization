@@ -5,7 +5,7 @@
 #BSUB -e logs/SMI2_%J.err
 #BSUB -R "select[mem>64] rusage[mem=64] " 
 #BSUB -q rna
-#BSUB -n 6
+#BSUB -n 1
 
 module load samtools
 module load R
@@ -20,12 +20,8 @@ full_path=/beevol/home/wellskri/Analysis/Lori_Sussel/Nicole_Moss/eclip_normaliza
 #     $full_path/manifest_files/manfest_file_r2.txt \
 #     $full_path/data/samtools_sort_r2
 
-# perl \
-#     $full_path/src/scripts/peak_input_normalization_wrapper.pl \
-#     $full_path/manifest_files/manfest_file_test_compression_r2_perl.txt \
-#     $full_path/data/test_compression_r2
-
-perl \
-    $full_path/src/scripts/peak_input_normalization_wrapper.pl \
-    $full_path/manifest_files/manfest_file_test_unmapped_r2_perl.txt \
-    $full_path/data/test_unmatched
+python \
+    $full_path/src/scripts/peak_input_normalization.py \
+    -m $full_path/manifest_files/manfest_file_r2_python.txt \
+    -o $full_path/python_results_all \
+    -f perl_script
