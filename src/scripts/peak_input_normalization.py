@@ -39,6 +39,8 @@ def main():
         clip_bam = sample_dict[sample]["clip_bam"]
 
         with open(save_file_all, "w") as write_file, open(bed_file, "r") as in_bed:
+            write_file.write("chromosome\tstart\tend\tlog10p\tpvalue\tlog2fc\tstrand\t" +
+                "peak_counts_clip\tpeak_counts_input\ttotal_clip_counts\ttotal_input_counts\n")
             print("starting analysis of " + bed_file)
             for line in in_bed:
                 bed_dict = make_bed_dict(line)
@@ -50,28 +52,30 @@ def main():
                 if options.flavor == "perl_script":
                     # To be consistent with the perl script use:
                     read_count_input += 1
-                elif options.flavor == "default":
-                    # Otherwise use
-                    if read_count_input == 0:
-                        read_count_input = 1
-                else:
+                elif options.flavor != "default":
                     sys.exit("unrecognized 'flavor' argument! Use 'perl_script' or 'default'")
 
                 total_clip_reads = total_reads_dict[clip_bam]
                 total_input_reads = total_reads_dict[input_bam]
 
                 # Run tests
-                p_val_log, p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input, total_clip_reads, total_input_reads)
+                p_val_log, p_val, logfc = chi_square_or_fisher(read_count_clip, read_count_input,
+                    total_clip_reads, total_input_reads, options)
                 
                 # Write to a file
-                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"],
-                    bed_dict["start"], bed_dict["end"], p_val_log, logfc, bed_dict["strand"],
+                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(bed_dict["chromosome"],
+                    bed_dict["start"], bed_dict["end"], p_val_log, p_val, logfc, bed_dict["strand"],
                     read_count_clip, read_count_input, total_clip_reads, total_input_reads))
                 
                 # Save all output to a dictionary for compressing
                 bed_dict["p_value"] = p_val
                 bed_dict["log"] = logfc
                 bed_dict["p_val_log"] = p_val_log
+                bed_dict["read_count_clip"] = read_count_clip
+                bed_dict["read_count_input"] = read_count_input
+                bed_dict["total_clip_reads"] = total_clip_reads
+                bed_dict["total_input_reads"] = total_input_reads
+                bed_dict["p_val"] = p_val
                 save_val = bed_dict["chromosome"] + "_" + bed_dict["strand"]
 
                 results_dict[save_val].append(bed_dict)
@@ -404,7 +408,7 @@ def count_bam_reads(bed_dict, bam_file, options):
         # is thousands of bp long and skips the peak.
         keep_read = False
         for position in read.get_reference_positions():
-            if position > start and position < end:
+            if position >= start and position <= end:
                 keep_read = True
                 continue
                 
@@ -449,7 +453,7 @@ def count_bam_reads(bed_dict, bam_file, options):
 # Perform chi square or fisher exact test #
 ###########################################
 
-def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
+def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total, options):
     """
     Decides if a chi-square or fiser exact test. The fisher exact test will be
     run if any of the values or expected values will be less than 5. Once this
@@ -476,8 +480,14 @@ def chi_square_or_fisher(peak_clip, peak_input, clip_total, input_total):
     # Make a contengency table
     obs = np.array([[a, b], [c, d]])
 
-    # logfc
-    logfc = math.log2((a / int(clip_total)) / (c / int(input_total)))
+    # Log fold change
+    if options.flavor == "perl_script":
+        # To be consistent with the perl script use (1 has already been added to the input):
+        logfc = math.log2((a / int(clip_total)) / (c / int(input_total)))
+    elif options.flavor == "default":
+        # Add a pseudocount of 1 to all (not just the input and not for the statistical test)
+        logfc = math.log2(((a + 1) / (int(clip_total) + 1)) / ((c + 1) / (int(input_total) + 1)))
+
 
     # Set p value to 1 and log p value to 0 if input is higher than clip
     if logfc < 0:
@@ -625,12 +635,16 @@ def compress_peaks(dict_of_results):
 
 def write_compressed_peaks(write_dict, file_name):
     with open(file_name, "w") as write_file:
+        write_file.write("chromosome\tstart\tend\tlog10p\tpvalue\tlog2fc\tstrand\t" +
+          "peak_counts_clip\tpeak_counts_input\ttotal_clip_counts\ttotal_input_counts\n")
         for chromosome in write_dict:
             for write_list in write_dict[chromosome]:
-                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(write_list["chromosome"],
-                    write_list["start"], write_list["end"], write_list["p_val_log"],
-                    write_list["log"], write_list["strand"]))
-
+                write_file.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                    write_list["chromosome"], write_list["start"], write_list["end"],
+                    write_list["p_val_log"], write_list["p_val"],
+                    write_list["log"], write_list["strand"], write_list["read_count_clip"],
+                    write_list["read_count_input"], write_list["total_clip_reads"],
+                    write_list["total_input_reads"]))
 
 if __name__ == "__main__":
     main()
