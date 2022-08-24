@@ -65,8 +65,8 @@ optional arguments:
   * Column 1 - sample number, should be a unique value for each line in the file
   * Column 2 - sample name, this could be the name of the protein
   * Column 3 - cell type
-  * Column 4 - Bam file (for just read 1 or read 2) containing the clip reads
-  * Column 5 - Bam file (for just read 1 or read 2) containing the input reads
+  * Column 4 - Bam file (for just read 1) containing the clip reads. The peak file with the same name (but `.bam` replaced with `.peaks.bed`) is expected to be in the same folder.
+  * Column 5 - Bam file (for just read 1) containing the input reads. The peak file with the same name (but `.bam` replaced with `.peaks.bed`) is expected to be in the same folder.
 * `-o` `--output_dir`: Path to the output directory. The directory will be made. Default is `results`
 * `-s` `--strandeness`: If it is forwarded stranded (`stranded`, read maps to the same strand as the gene), reverse stranded (`reverse_stranded`, read maps to the opposite strand as the gene) or unstranded (`unstranded`).
 * `-f` `--flavor`: If you want the exact results from the `perl` script, choose `perl_script`. This adds a psudocount of 1 to the input in all cases. Otherwise, the default is to only use a pseudocount to determine the log fold changes.
@@ -75,3 +75,6 @@ Example scripts to run the files are in `src/shell_scripts`
 
 ### Saved files
 The first time through the script, the number of reads in each bam file will be counted. This is a slow process, so the number of reads is saved with the same name as your manifest file appended with `.mappped_read_num`. If this file exists, the counts from it will be used instead of recounting.
+
+### Some potential issues that need testing
+This was developed using read 1 to run clipper (because our protocol was stranded with read 1 mapping to the forward stand). The output of clipper is a bed file with the same name but `.peaks.bed` in place of the `.bam`. This should work if you use read 2 to call peaks with clipper, but then you either need to use read 1 (and rename the files) or use read 2 and the stranded argument will be opposite of what it would be if you use read 1. This has not been tested, but I plan to test it in the future. If your data was generated using a reverse stranded protocol, you should be able to use the original clipper script.
