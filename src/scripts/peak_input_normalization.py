@@ -185,7 +185,12 @@ def get_input_files(input_info):
     Returns - a list of file names based on the input manifest file.
     """
 
-    save_name, sample, celltype, clip_bam, input_bam = input_info.strip().split("\t")
+    try:
+        save_name, sample, celltype, clip_bam, input_bam = input_info.strip().split("\t")
+    except:
+        sys.exit("Not the right number of columns in your manifest file. Columns " +
+            "should be 'save_name', 'sample', 'celltype', 'clip_bam', 'input_bam' " +
+            "all separated by tabs.")
     bedfile = re.sub("bam", "peaks.bed", clip_bam)
 
     return([save_name, bedfile, clip_bam, input_bam])
