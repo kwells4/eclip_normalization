@@ -2,9 +2,13 @@
 Scripts to replicate the normalization performed after clipper. The original scripts are [here]( https://github.com/YeoLab/gscripts/tree/1.1/perl_scripts)
 
 ## Requirements
+
 `numpy`
+
 `scipy`
+
 `pysam`
+
 `samtools` - must be loaded in your working environment
 
 `python` v3.X
