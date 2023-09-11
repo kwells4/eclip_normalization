@@ -1,6 +1,10 @@
 # eClip normalization
 Scripts to replicate the normalization performed after clipper. The original scripts are [here]( https://github.com/YeoLab/gscripts/tree/1.1/perl_scripts)
 
+To view the repository as it was when "Modulation of insulin secretion by RBFOX2-mediated alternative splicing" was published, view:
+[![DOI](https://zenodo.org/badge/475504620.svg)](https://zenodo.org/badge/latestdoi/475504620)
+
+
 ## Requirements
 
 `numpy`
